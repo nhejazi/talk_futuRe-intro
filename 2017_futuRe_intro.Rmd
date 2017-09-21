@@ -6,11 +6,11 @@ date: "`r lubridate::now()`"
 output:
   xaringan::moon_reader:
     lib_dir: libs
-    chakra: libs/remark-latest.min.js
     css: ["default", "custom.css"]
     nature:
       highlightStyle: zenburn
       highlightLines: true
+      countIncrementalSlides: false
 ---
 
 ```{r knitr_setup, echo=FALSE, message=FALSE}
@@ -23,21 +23,20 @@ showtext::showtext.opts(dpi = 300)
 
 --
 
-### View them online:
+### View online:
 
-* [stat.berkeley.edu/~nhejazi/present/2017_sl3_intro/2017_sl3_intro.html](https://www.stat.berkeley.edu/~nhejazi/present/2017_sl3_intro/2017_sl3_intro.html)
-
-* here's a shortened URL: [https://goo.gl/bqP2tD](https://goo.gl/bqP2tD)
+* shortened URL: [https://goo.gl/T47hs6](https://goo.gl/T47hs6)
 
 --
 
-### View them locally:
+### Build locally:
 
-_You'll need to clone the project branch containing the source materials for
-this talk from GitHub. This includes the finalized slide deck (in HTML)._
+_You'll need to clone the `git` repo of source materials and then build the
+slide deck (HTML)._
 
 ```{bash, eval=FALSE}
-git clone -b talk https://github.com/jeremyrcoyle/sl3.git
+git clone https://github.com/nhejazi/talk_futuRe-intro.git
+make
 ```
 
 ???
@@ -276,7 +275,9 @@ class: center, middle
 
 # Thanks!
 
-We have a great team: Jeremy Coyle, Nima Hejazi, Ivana Malenica, Oleg Sofrygin.
+twitter/[@nshejazi](https://twitter.com/nshejazi), github/[@nhejazi](https://github.com/nhejazi)
+
+[nimahejazi.org](http://nimahejazi.org/), [stat.berkeley.edu/~nhejazi](https://www.stat.berkeley.edu/~nhejazi/)
 
 Slides created via the R package
 [**xaringan**](https://github.com/yihui/xaringan).
