@@ -1,6 +1,6 @@
 ---
 title: "Towards a `future` for R"
-subtitle: "A fresh approach to Parallel Computing"
+subtitle: "A fresh approach to parallel computing"
 author: "[Nima Hejazi](http://nimahejazi.org)"
 date: "`r lubridate::now()`"
 output:
@@ -35,186 +35,98 @@ _You'll need to clone the `git` repo of source materials and then build the
 slide deck (HTML)._
 
 ```{bash, eval=FALSE}
-git clone https://github.com/nhejazi/talk_futuRe-intro.git
-make
+git clone https://github.com/nhejazi/talk_futuRe-intro.git ~/futuRe-intro
+cd ~/futuRe-intro
+make  # requires the R package "xaringan"
+open ./2017_futuRe_intro.html
 ```
 
 ???
 
-- This talk will focus on introducing the new `sl3` R package, which provides a
-modern implementation of the Super Learner algorithm [@vdl2007super], a method
-for performing stacked regressions [@breiman1996stacked] and combining this with
-covariate screening and cross-validation.
+- This talk will focus on introducing an ecosystem of R packages centered around
+futures, which collectively provide tools for __asynchronous__ computation in R.
 
 ---
 class: inverse, center, middle
 
-# `sl3`: The Core Design
+# R's `future` is now: Core concepts
 
 ---
 
-# `sl3` Architecture
+# A `promise` of a better `future`
 
-All of the classes defined in `sl3` are based on the R6 framework, which brings
-an object-oriented paradigm to the R language.
-
-## Core classes
-
-- `task` - an object containing the data set of interest and specifying
-important features of the data (e.g., repeated measures).
+## So, what are `future`s?
 
 --
 
-- `lrnr_base` - a base class that serves as the foundation for other classes
-defined within `sl3`.
+"A `future` is an abstraction for a value that may be available at some point in
+the future. The state of a `future` can either be unresolved or resolved. As
+soon as it is resolved, the value is available instantaneously. If the value is
+queried while the `future` is still unresolved, the current process is blocked
+until the `future` is resolved." - excerpted from "A Future for R: A
+Comprehensive Overview"
 
 --
 
-- `Pipeline` - a learner-type object created by chaining together screening and
-learning algorithms, allowing for covariate screening and model fitting to be
-subjected to the same cross-validation process.
+- `future` - an object corresponding to an expression to be evaluated at a later
+  point in time, when its result is needed.
 
 --
 
-- `Stack` - a stacked regression model -- that is, a learner-type object created
-by combining different (independent) learners or pipelines.
+- `promise` - a _lazy evaluation mechanism_ that results in a given expression
+  being evaluated only if its value is requested.
 
-???
+--
 
-- Probably good to point out that cross-validating a `Stack` allows for an
-included `Pipeline` to be subjected to CV in the same way as other learners
-(seriously awesome feature).
-
----
-class: inverse, center, middle
-
-# `sl3` in Action
-
-## There ain't nothin' like a test drive...
-
----
-
-# Get the package
-
-- Currently, installation from the `master` branch is the only option:
-
-```{r install_pkg, message=FALSE, eval=FALSE}
-if (!("sl3" %in% installed.packages())) {
-  devtools::install_github("jeremyrcoyle/sl3")
-}
+```{r future-explicit, eval=FALSE}
+f <- future({ expr })  # creates a future
+v <- value(f)  # gets the value of the future (blocks if not yet resolved)
 ```
 
 --
 
-- Work is underway to set up a [`drat`
-archive](http://dirk.eddelbuettel.com/code/drat.html) to host all stable
-versions of the package.
-
---
-
-- Of course, the package will eventually be available on CRAN, though a
-submission to this repository is still far down the road.
-
---
-
-To start using `sl3`, let's load the package:
-
-```{r prelims-pkg, message=FALSE}
-library(future)
-library(future.batchtools)
-library(doFuture)
-library(BiocParallel.FutureParam)
-```
-
----
-
-# A "toy" data set
-
-We can't do any model fitting without data. We'll use the `cpp` data set,
-included with the package, for our experiment.
-
-```{r prelims-data, message=FALSE}
-# load example data set
+```{r future-implicit, eval=FALSE}
+v %<-% { expr }  # creates a future and a promise to its value
 ```
 
 ???
 
-- A working implementation of a targeted learning approach to biomarker
-discovery using moderated statistics.
-
-- Next, we'll walk through analyzing some data.
-
----
-
-# Setting up a `Task`
-
-Recall that a `Task` is the core structure that holds the data set and
-specifications to be respected in the estimation/modeling procedure.
-
-```{r sl3-task-setup, message=FALSE}
-```
-
---
-
-Data is in the nodes:
-
-```{r sl3-task-nodes, message=FALSE}
-```
-
-???
-
-- talk about tasks
+- Both futures and promises are general programming concepts, not specific to R.
+- Futures allow for the computation of procedures/expressions to be postpoined
+  to some later time.
+- Promises are a mechanism that ensures that futures will be evaluated only when
+  they are needed. These work by a mechanism of delayed computation. See the R's
+  `delayedAssign` base function or Python's `dask` library.
 
 ---
 
-# Screeners, learners, pipelines
+# How to `plan` your `future`
 
-Both screeners and learners can be easily instantiated by calling their `new`
-methods:
-
-```{r sl3-core-1, message=FALSE}
-```
+There are many strategies for evaluating a `future`. Within the nomenclature of
+the `future` ecosystem, these are called `plan`s.
 
 --
 
-We can even pull screening and learning algorithms directly from
-`Super Learner`:
+### Synchronous (non-parallel) evaluation
 
-```{r sl3-core-2, message=FALSE}
-```
+- `sequential`: sequentially and in the current R process
 
---
-
-And pipelines can be easily created by stringing screeners and learners
-together:
-
-```{r sl3-core-3, message=FALSE}
-```
+- `transparent`: as sequential but with early signaling (for debugging)
 
 --
 
-Training a learners (or pipelines) is as easy as calling the `train` method:
+### Asynchronous (parallel) evaluation
 
-```{r sl3-core-4, message=FALSE}
-```
+- `multicore`: forked R processes on current machine (_n.b._, not supported on
+Windows)
 
----
+- `multisession`: background R sessions on current machine
 
-# Stacks
+- `multiprocess`: `multicore` if supported; otherwise, `multisession`
 
-We can create stacked regression models (Super Learners) by instantiating a new
-stack with several existing learners. (Note that we can even incldue pipelines
-in the model stack).
+- `cluster`: external R sessions on current, local, and/or remote machines
 
-```{r sl3-stacks-1, message=FALSE}
-```
-
---
-
-Let's take a look at the predictions made by the stacked model:
-
-```{r sl3-stacks-2, message=FALSE}
-```
+- `remote`: simple access to remote R sessions
 
 ???
 
@@ -222,60 +134,203 @@ Let's take a look at the predictions made by the stacked model:
 
 ---
 
-# But What About Cross-Validation?
+# The `future` ecosystem
 
-Almost forgot! CV is necessary in order to honestly evaluate our models and
-avoid overfitting. Thus, we need to be able to easily cross-validate the whole
-process. We provide facilities for easily doing this, based on the [`origami`
-package](https://github.com/jeremyrcoyle/origami).
+```{r install_pkgs, message=FALSE, eval=FALSE}
+install.packages(c("future", "doFuture", "future.batchtools"))
+source("http://callr.org/install#HenrikBengtsson/BiocParallel.FutureParam")
+```
 
 --
 
-Cross-validating a stacked model is as easy as instantiating and training a new
-`Lrnr_cv`. Let's do this with the stacked model we created before
+- `doFuture`: "A Universal Foreach Parallel Adaptor using the Future API"
+  - `%dopar%` adaptor allows the `foreach` package to work with any type of
+    `future`.
+  - Allows `future`s to work with HPC clusters and the `BiocParallel` package.
+  - Plug-in replacement for packages like `doParallel`, `doSNOW`, `doMPI`, etc.
+  - Check it out: https://github.com/HenrikBengtsson/doFuture
 
-```{r sl3-cv-1, message=FALSE}
-```
+--
+
+- `future.batchtools`: "A Future API for Parallel and Distributed Processing"
+  - Leverage HPC clusters just by a switching settings - your code stays exactly
+    as it is!
+  - Supports several HPC job schedulers: TORQUE, Slurm, SGE, LSF, OpenLava
+  - Check it out: https://github.com/HenrikBengtsson/future.batchtools
+
+--
+
+- `BiocParallel.FutureParam`: "A `BiocParallelParam` Class for Futures"
+  - `FutureParam` allows `BiocParallel` to work with any type of `future`.
+  - Allows `future`s to operate seamlessly within the
+    [Bioconductor](http://www.bioconductor.org/) ecosystem.
+  - Plug-in replacement for `MulticoreParam()`, `BatchJobsParam`, etc.
+  - Check it out: https://github.com/HenrikBengtsson/BiocParallel.FutureParam
+
+???
+
+- `doFuture` resolves issues with global variables that normally arise with
+  `foreach` (recall the `.export` requirement).
+- An abundance of documentation is available for these extension packages - best
+  to consult these for more information.
+
+---
+class: inverse, center, middle
+
+# `future`s in Action
+
+## There ain't nothin' like a test drive...
 
 ---
 
-# Putting it all together: Super Learning
+# Computing with `future`s I
 
-We can build a Super Learner model by combining a cross-validated stacked model
-with a meta-learning algorithm.
+```{r prelims_pkgs, message=FALSE, echo=FALSE}
+library(future)
+library(listenv)
+#future::availableCores()
+```
 
-Let's do this with the cross-validated stack we just created, using a GLM as our
-meta-learner:
+Let's try computing via a nested for-loop with `future`s.
 
-```{r sl3-cv-sl-1, message=FALSE}
+--
+
+```{r nested-for-future}
+future_varfuns <- function(x, n = 10, times = 10, fun = "mean") {
+  # over the columns of a 2-d array, compute the mean of FUN within a sample
+  var_meanfuns <- listenv::listenv()
+  for (j in seq_len(ncol(x))) {  # loop over variables/columns
+    var_meanfuns[[j]] %<-% {
+      samp_fun <- listenv::listenv()
+      for (i in seq_len(times)) {
+        samp_fun[[i]] %<-% match.fun(fun)(x[sample(nrow(x), n), j])
+      }
+      as.list(mean(unlist(samp_fun)))
+    }
+  }
+  return(var_meanfuns)
+}
 ```
 
 --
 
-Just as in the cases we've already seen, training the Super Learner is an
-essentially trivial process:
-
-```{r sl3-cv-sl-2, message=FALSE}
-```
-
---
-
-What do the predictions from our new Super Learner look like?
-
-```{r sl3-cv-sl-3, message=FALSE}
+```{r compute-nested-for, message=FALSE, warning=FALSE}
+plan(list(multiprocess, sequential))
+result <- future_varfuns(x = replicate(4, rnorm(100)))
+unlist(as.list(result))
 ```
 
 ???
 
-- Worth mentioning that the flexibility offered by our design allows us to
-invoke the Super Learner algorithm, but we can also do a lot more...
+- Could have reversed which loop gets parallelized by flipping `multiprocess`
+  and `sequential`.
+- If submitting to HPC, could have invoked the scheduler (for nodes), then core
+  parallelization (e.g., `plan(list(batchtools_slurm, multiprocess))`)
 
 ---
-class: center, middle
+
+# Computing with `future`s II
+
+The `origami` package provides a highly flexible way to perform cross-validation
+of (nearly) _any_ R function, relying on `future`s for (a)synchronous
+computation.
+
+```{r load_origami, message=FALSE}
+library(origami)
+data(mtcars)
+folds <- make_folds(mtcars)
+```
+
+```{r setup-origami, echo=FALSE, message=FALSE}
+cv_lm <- function(fold, data, reg_form) {
+  # get name and index of outcome variable from regression formula
+  out_var <- as.character(unlist(str_split(reg_form, " "))[1])
+  out_var_ind <- as.numeric(which(colnames(data) == out_var))
+
+  # split up data into training and validation sets
+  train_data <- training(data)
+  valid_data <- validation(data)
+
+  # fit linear model on training set and predict on validation set
+  mod <- lm(as.formula(reg_form), data = train_data)
+  preds <- predict(mod, newdata = valid_data)
+
+  # capture results to be returned as output
+  out <- list(coef = data.frame(t(coef(mod))),
+              SE = ((preds - valid_data[, out_var_ind])^2))
+  return(out)
+}
+```
+
+--
+
+```{r future-sequential, message=FALSE, warning=FALSE}
+plan(sequential)
+time_seq <- system.time({
+  results_seq <- cross_validate(cv_fun = cv_lm, folds = folds,
+                                data = mtcars, reg_form = "mpg ~ .")
+})
+```
+
+--
+
+```{r future-parallel, message=FALSE, warning=FALSE}
+plan(multisession)
+time_ms <- system.time({
+  results_ms <- cross_validate(cv_fun = cv_lm, folds = folds,
+                               data = mtcars, reg_form = "mpg ~ .")
+})
+```
+
+???
+
+- ...
+
+- ...
+
+---
+
+# Tooling with `future`s
+
+### R/`origami`
+
+- Core function is a wrapper around `future_lapply`, allowing for a variety of
+  cross-validation schemes to be applied with delayed computations.
+- Check it out: https://github.com/jeremyrcoyle/origami
+- status: _released_ - just grab it from CRAN!
+
+--
+
+### R/`cvma`
+
+- Nested cross-validation for summarizing associations in multivariate outcome
+  settings (parallelized via `future_lapply`).
+- Check it out: https://github.com/benkeser/cvma
+- status: _in early development_ - no guarantees yet.
+
+--
+
+### R/`methyvim`
+
+- Nonparametric analysis of DNA differential methylation (combines `future`,
+  `doFuture`, `BiocParallel.FutureParam`, `BiocParallel`).
+- Check it out: https://github.com/nhejazi/methyvim
+- status: _in development_ - on Bioconductor (v3.6), to be released 31 October.
+
+???
+
+- For a look at how `future`, `doFuture`, and `Biocparallel.Futureparam` can be
+combined, `methyvim::set_parallel`.
+- ...
+
+
+---
+class: inverse, center, middle
 
 # Thanks!
 
-twitter/[@nshejazi](https://twitter.com/nshejazi), github/[@nhejazi](https://github.com/nhejazi)
+twitter/[@nshejazi](https://twitter.com/nshejazi),
+github/[@nhejazi](https://github.com/nhejazi)
 
 [nimahejazi.org](http://nimahejazi.org/), [stat.berkeley.edu/~nhejazi](https://www.stat.berkeley.edu/~nhejazi/)
 
